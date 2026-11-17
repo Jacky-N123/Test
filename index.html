@@ -170,6 +170,11 @@
             <option value="1">程度一（基礎概念）</option>
             <option value="2">程度二（複合圖形與綜合題）</option>
         </select>
+        <label for="langSelect"><b>解說語言：</b></label>
+        <select id="langSelect" onchange="updateLanguage()">
+            <option value="zh">中文 (Chinese)</option>
+            <option value="en">英文 (English)</option>
+        </select>
 
         <button onclick="generateQuestion()">🎲 生成新題目</button>
         <button class="btn-secondary" onclick="toggleSolution()">💡 顯示/隱藏解答</button>
@@ -190,8 +195,26 @@
 </div>
 
 <script>
+    let currentQuestionSeed = Math.floor(Math.random() * 1000000);
+    let rngState = currentQuestionSeed;
+    let lang = 'zh'; // 全域變數，修正切換語言與子函數讀取不到的問題
+
+    function seededRandom() {
+        rngState = (rngState * 9301 + 49297) % 233280;
+        return rngState / 233280;
+    }
+
     function getRandomInt(min, max) {
-        return Math.floor(Math.random() * (max - min + 1)) + min;
+        return Math.floor(seededRandom() * (max - min + 1)) + min;
+    }
+
+    function updateLanguage() {
+        const solBox = document.getElementById('solutionText');
+        const isVisible = solBox.style.display === 'block';
+        generateQuestion(false);
+        if (isVisible) {
+            solBox.style.display = 'block';
+        }
     }
 
     function toggleSolution() {
@@ -213,62 +236,40 @@
         let dx = p2.x - p1.x;
         let dy = p2.y - p1.y;
         let dist = Math.hypot(dx, dy);
-        return {
-            x: p2.x + (dx / dist) * len,
-            y: p2.y + (dy / dist) * len
-        };
+        return { x: p2.x + (dx / dist) * len, y: p2.y + (dy / dist) * len };
     }
 
     function createParallelArrow(p1, p2, color = "#2b6cb0") {
         let mx = (p1.x + p2.x) / 2;
         let my = (p1.y + p2.y) / 2;
         let angleDeg = Math.atan2(p2.y - p1.y, p2.x - p1.x) * (180 / Math.PI);
-        
-        return `
-            <g transform="translate(${mx}, ${my}) rotate(${angleDeg})">
-                <path d="M -6 -5 L 2 0 L -6 5" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </g>
-        `;
+        return `<g transform="translate(${mx}, ${my}) rotate(${angleDeg})"><path d="M -6 -5 L 2 0 L -6 5" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>`;
     }
 
     function createAngleArc(v, p1, p2, r, label, color = "#e53e3e", shiftX = 0, shiftY = 0) {
         let a1 = Math.atan2(p1.y - v.y, p1.x - v.x);
         let a2 = Math.atan2(p2.y - v.y, p2.x - v.x);
-        
         let diff = a2 - a1;
         while (diff < -Math.PI) diff += 2 * Math.PI;
         while (diff > Math.PI) diff -= 2 * Math.PI;
         
         let startAngle = a1;
         let endAngle = a1 + diff;
-        
-        let sx = v.x + r * Math.cos(startAngle);
-        let sy = v.y + r * Math.sin(startAngle);
-        let ex = v.x + r * Math.cos(endAngle);
-        let ey = v.y + r * Math.sin(endAngle);
+        let sx = v.x + r * Math.cos(startAngle), sy = v.y + r * Math.sin(startAngle);
+        let ex = v.x + r * Math.cos(endAngle), ey = v.y + r * Math.sin(endAngle);
         
         let largeArcFlag = Math.abs(diff) > Math.PI ? 1 : 0;
         let sweepFlag = diff > 0 ? 1 : 0;
         
         let pathD = `M ${sx} ${sy} A ${r} ${r} 0 ${largeArcFlag} ${sweepFlag} ${ex} ${ey}`;
-        
         let labelHtml = '';
         if (label && label.trim() !== '') {
             let midAngle = a1 + diff / 2;
             let lx = v.x + (r + 28) * Math.cos(midAngle);
             let ly = v.y + (r + 28) * Math.sin(midAngle);
-            labelHtml = `
-            <foreignObject x="${lx - 45 + shiftX}" y="${ly - 15 + shiftY}" width="90" height="30">
-                <div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:${color}; font-weight:bold; overflow:visible;">
-                    $${label}$
-                </div>
-            </foreignObject>`;
+            labelHtml = `<foreignObject x="${lx - 45 + shiftX}" y="${ly - 15 + shiftY}" width="90" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:${color}; font-weight:bold; overflow:visible;">$${label}$</div></foreignObject>`;
         }
-        
-        return `
-            <path d="${pathD}" fill="none" stroke="${color}" stroke-width="1.8" />
-            ${labelHtml}
-        `;
+        return `<path d="${pathD}" fill="none" stroke="${color}" stroke-width="1.8" />${labelHtml}`;
     }
 
     function createArcTick(v, p1, p2, r, color="#2b6cb0") {
@@ -286,18 +287,47 @@
     }
 
     function createVertexLabel(p, label, offX = 0, offY = 0) {
-        return `
-            <foreignObject x="${p.x + offX - 20}" y="${p.y + offY - 15}" width="40" height="30">
-                <div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:#2d3748; font-weight:bold;">
-                    $${label}$
-                </div>
-            </foreignObject>
-        `;
+        return `<foreignObject x="${p.x + offX - 20}" y="${p.y + offY - 15}" width="40" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:#2d3748; font-weight:bold;">$${label}$</div></foreignObject>`;
     }
 
-    function generateQuestion() {
+    function generateQuestion(isNew = true) {
+        if (isNew === true || typeof isNew !== 'boolean') {
+            currentQuestionSeed = Math.floor(Math.random() * 1000000);
+        }
+        rngState = currentQuestionSeed;
         const topic = document.getElementById('topicSelect').value;
         const level = parseInt(document.getElementById('levelSelect').value);
+        lang = document.getElementById('langSelect').value;
+
+        const txt = {
+            ext_angle_tri: lang === 'zh' ? '\\Delta\\text{外角}' : '\\text{ext. } \\angle \\text{ of } \\Delta',
+            angle_sum_tri: lang === 'zh' ? '\\Delta\\text{內角和}' : '\\angle \\text{ sum of } \\Delta',
+            vert_opp: lang === 'zh' ? '\\text{對頂角}' : '\\text{vert. opp. } \\angle\\text{s}',
+            adj_st_line: lang === 'zh' ? '\\text{直線上的鄰角}' : '\\text{adj. } \\angle\\text{s on a st. line}',
+            base_isos: lang === 'zh' ? '\\text{等腰}\\Delta\\text{底角}' : '\\text{base } \\angle\\text{s, isos. } \\Delta',
+            corr_EF_BD: lang === 'zh' ? '\\text{同位角, } EF // BD' : '\\text{corr. } \\angle\\text{s, } EF // BD',
+            corr_DE_BC: lang === 'zh' ? '\\text{同位角, } DE // BC' : '\\text{corr. } \\angle\\text{s, } DE // BC',
+            alt_EF_BC: lang === 'zh' ? '\\text{內錯角, } EF // BC' : '\\text{alt. } \\angle\\text{s, } EF // BC',
+            alt_ED_BC: lang === 'zh' ? '\\text{內錯角, } ED // BC' : '\\text{alt. } \\angle\\text{s, } ED // BC',
+            prop_equil: lang === 'zh' ? '\\text{等邊}\\Delta\\text{性質}' : '\\text{prop. of equil. } \\Delta',
+            sides_opp: lang === 'zh' ? '\\text{等角對邊相等}' : '\\text{sides opp., equal } \\angle\\text{s}',
+            sum_poly: lang === 'zh' ? '\\text{多邊形內角和}' : '\\text{sum of polygon}',
+            sum_ext_poly: lang === 'zh' ? '\\text{多邊形外角和}' : '\\text{sum of ext. } \\angle\\text{s of polygon}',
+            given: lang === 'zh' ? '\\text{已知}' : '\\text{given}',
+            reg_poly_sides: lang === 'zh' ? '\\text{ (正多邊形的邊)}' : '\\text{ (sides of regular polygons)}',
+            bisects: lang === 'zh' ? '\\text{ 平分 }' : '\\text{ bisects }',
+            sum_int_poly_text: lang === 'zh' ? '\\text{多邊形內角和}' : '\\text{Sum of int. } \\angle\\text{s of polygon}',
+            sum_ext_poly_text: lang === 'zh' ? '\\text{多邊形外角和}' : '\\text{Sum of ext. } \\angle\\text{s of polygon}',
+            int_reg_pentagon: lang === 'zh' ? '\\text{正五邊形內角}' : '\\text{Int. } \\angle \\text{ of reg. pentagon}',
+            sum_int_pentagon: lang === 'zh' ? '\\text{五邊形內角和}' : '\\text{Sum of int. } \\angle\\text{s of pentagon}',
+            sum_int_hexagon: lang === 'zh' ? '\\text{六邊形內角和}' : '\\text{Sum of int. } \\angle\\text{s of hexagon}',
+            int_angle_of: function(n) { return lang === 'zh' ? n + '\\text{邊形內角}' : '\\text{Int. } \\angle \\text{ of } ' + n + '\\text{-gon}'; },
+            sum_int_angles: lang === 'zh' ? '\\text{內角和}' : '\\text{Sum of int. } \\angle\\text{s}',
+            sum_ext_angles: lang === 'zh' ? '\\text{外角和}' : '\\text{Sum of ext. } \\angle\\text{s}',
+            ext_angle_at: function(v) { return lang === 'zh' ? '\\text{於 } ' + v + ' \\text{ 的外角}' : '\\text{Ext. } \\angle \\text{ at } ' + v; },
+            ext_regular_n: lang === 'zh' ? '\\text{正} n \\text{邊形外角}' : '\\text{Ext. } \\angle \\text{ of regular } n\\text{-gon}'
+        };
+
         const svg = document.getElementById('geoSvg');
         const qText = document.getElementById('questionText');
         const solText = document.getElementById('solutionText');
@@ -305,72 +335,51 @@
         svg.innerHTML = '';
         solText.style.display = 'none';
 
-        const badgeHtml = `<span class="badge ${level === 1 ? 'badge-lvl1' : 'badge-lvl2'}">程度 ${level === 1 ? '一' : '二（綜合題）'}</span><br>`;
+        const badgeHtml = `<span class="badge ${level === 1 ? 'badge-lvl1' : 'badge-lvl2'}">${lang === 'zh' ? (level === 1 ? '程度一' : '程度二（綜合題）') : (level === 1 ? 'Level 1' : 'Level 2 (Complex)')}</span><br>`;
 
         switch(topic) {
-            case 'extAngle': generateExtAngle(svg, qText, solText, level, badgeHtml); break;
-            case 'isosceles': generateIsosceles(svg, qText, solText, level, badgeHtml); break;
-            case 'equilateral': generateEquilateral(svg, qText, solText, level, badgeHtml); break;
-            case 'sidesOpp': generateSidesOpp(svg, qText, solText, level, badgeHtml); break;
-            case 'polygonInt': generatePolygonInt(svg, qText, solText, level, badgeHtml); break;
-            case 'polygonExt': generatePolygonExt(svg, qText, solText, level, badgeHtml); break;
+            case 'extAngle': generateExtAngle(svg, qText, solText, level, badgeHtml, txt); break;
+            case 'isosceles': generateIsosceles(svg, qText, solText, level, badgeHtml, txt); break;
+            case 'equilateral': generateEquilateral(svg, qText, solText, level, badgeHtml, txt); break;
+            case 'sidesOpp': generateSidesOpp(svg, qText, solText, level, badgeHtml, txt); break;
+            case 'polygonInt': generatePolygonInt(svg, qText, solText, level, badgeHtml, txt); break;
+            case 'polygonExt': generatePolygonExt(svg, qText, solText, level, badgeHtml, txt); break;
         }
 
         refreshMath();
     }
 
     // ==========================================
-    // 1. 三角形內角和及外角 (4.1)
+    // 1. 三角形內角和及外角
     // ==========================================
-    function generateExtAngle(svg, qText, solText, level, badge) {
+    function generateExtAngle(svg, qText, solText, level, badge, txt) {
         if (level === 1) {
             const type = getRandomInt(1, 3);
             let angleA, angleB;
-            if (type === 1) { 
-                angleA = getRandomInt(50, 70); angleB = getRandomInt(50, 70);
-            } else if (type === 2) { 
-                angleA = getRandomInt(100, 125); angleB = getRandomInt(20, 35);
-            } else { 
-                angleA = getRandomInt(20, 35); angleB = getRandomInt(100, 125);
-            }
+            if (type === 1) { angleA = getRandomInt(50, 70); angleB = getRandomInt(50, 70); }
+            else if (type === 2) { angleA = getRandomInt(100, 125); angleB = getRandomInt(20, 35); }
+            else { angleA = getRandomInt(20, 35); angleB = getRandomInt(100, 125); }
             const ans = angleA + angleB;
 
-            let radA = angleA * Math.PI / 180;
-            let radB = angleB * Math.PI / 180;
-            let radC = Math.PI - radA - radB;
+            let radA = angleA * Math.PI / 180, radB = angleB * Math.PI / 180, radC = Math.PI - radA - radB;
+            let baseBC = 160, sideAB = baseBC * Math.sin(radC) / Math.sin(radA);
             
-            let baseBC = 160;
-            let sideAB = baseBC * Math.sin(radC) / Math.sin(radA);
-            
-            let ptB = {x: 0, y: 0};
-            let ptC = {x: baseBC, y: 0};
-            let ptA = {x: sideAB * Math.cos(radB), y: -sideAB * Math.sin(radB)};
-            let ptD = {x: baseBC + 90, y: 0};
-            
-            let minX = Math.min(ptA.x, ptB.x, ptC.x, ptD.x);
-            let maxX = Math.max(ptA.x, ptB.x, ptC.x, ptD.x);
-            let minY = Math.min(ptA.y, ptB.y, ptC.y, ptD.y);
-            
-            let currentWidth = maxX - minX;
-            let currentHeight = -minY; 
+            let ptB = {x: 0, y: 0}, ptC = {x: baseBC, y: 0}, ptA = {x: sideAB * Math.cos(radB), y: -sideAB * Math.sin(radB)}, ptD = {x: baseBC + 90, y: 0};
+            let currentWidth = Math.max(ptA.x, ptB.x, ptC.x, ptD.x) - Math.min(ptA.x, ptB.x, ptC.x, ptD.x);
+            let currentHeight = -Math.min(ptA.y, ptB.y, ptC.y, ptD.y); 
             
             let scale = 1;
             if (currentWidth > 440) scale = 440 / currentWidth;
             if (currentHeight > 180) scale = Math.min(scale, 180 / currentHeight);
             
-            ptA = {x: ptA.x * scale, y: ptA.y * scale};
-            ptB = {x: ptB.x * scale, y: ptB.y * scale};
-            ptC = {x: ptC.x * scale, y: ptC.y * scale};
-            ptD = {x: ptD.x * scale, y: ptD.y * scale};
+            ptA = {x: ptA.x * scale, y: ptA.y * scale}; ptB = {x: ptB.x * scale, y: ptB.y * scale};
+            ptC = {x: ptC.x * scale, y: ptC.y * scale}; ptD = {x: ptD.x * scale, y: ptD.y * scale};
             
             currentWidth = Math.max(ptA.x, ptB.x, ptC.x, ptD.x) - Math.min(ptA.x, ptB.x, ptC.x, ptD.x);
-            let offsetX = (520 - currentWidth) / 2 - Math.min(ptA.x, ptB.x, ptC.x, ptD.x);
-            let offsetY = 240; 
+            let offsetX = (520 - currentWidth) / 2 - Math.min(ptA.x, ptB.x, ptC.x, ptD.x), offsetY = 240; 
             
-            const A = {x: ptA.x + offsetX, y: ptA.y + offsetY};
-            const B = {x: ptB.x + offsetX, y: ptB.y + offsetY};
-            const C = {x: ptC.x + offsetX, y: ptC.y + offsetY};
-            const D = {x: ptD.x + offsetX, y: ptD.y + offsetY};
+            const A = {x: ptA.x + offsetX, y: ptA.y + offsetY}, B = {x: ptB.x + offsetX, y: ptB.y + offsetY};
+            const C = {x: ptC.x + offsetX, y: ptC.y + offsetY}, D = {x: ptD.x + offsetX, y: ptD.y + offsetY};
 
             svg.innerHTML = `
                 <line x1="${B.x}" y1="${B.y}" x2="${D.x}" y2="${D.y}" stroke="#2d3748" stroke-width="2"/>
@@ -382,10 +391,10 @@
                 ${createAngleArc(B, C, A, 25, `${angleB}^\\circ`)}
                 ${createAngleArc(C, A, D, 22, 'x', '#2b6cb0')}
             `;
-            qText.innerHTML = `${badge}<b>題目：</b>求圖中的未知角 $x$。（已知 $BCD$ 為一直線）`;
-            solText.innerHTML = `<b>詳細解題步驟：</b>
+            qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>求圖中的未知角 $x$。（已知 $BCD$ 為一直線）" : "<b>Question: </b>Find the unknown angle $x$ in the figure. (Given $BCD$ is a straight line)"}`;
+            solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
             $$\\begin{aligned}
-            x &= \\angle BAC + \\angle ABC && (\\text{ext. } \\angle \\text{ of } \\Delta) \\\\
+            x &= \\angle BAC + \\angle ABC && (${txt.ext_angle_tri}) \\\\
             x &= ${angleA}^\\circ + ${angleB}^\\circ \\\\
             x &= ${ans}^\\circ
             \\end{aligned}$$`;
@@ -397,26 +406,17 @@
                 const ans = 180 - (angleAEB + angleD);
                 
                 const radA = angleA * Math.PI / 180, radB = angleB * Math.PI / 180;
-                
-                let baseAB = 200; 
-                let h = baseAB / (1/Math.tan(radA) + 1/Math.tan(radB));
-                if (h > 165) { 
-                    let scale = 165 / h;
-                    baseAB *= scale;
-                    h = 165;
-                }
+                let baseAB = 200, h = baseAB / (1/Math.tan(radA) + 1/Math.tan(radB));
+                if (h > 165) { baseAB *= (165 / h); h = 165; }
                 
                 const A = {x: 260 - baseAB/2, y: 35}, B = {x: 260 + baseAB/2, y: 35};
                 const E = {x: A.x + h / Math.tan(radA), y: A.y + h};
                 
-                const lenED = 60; 
-                const dxB = E.x - B.x, dyB = E.y - B.y;
-                const distBE = Math.hypot(dxB, dyB);
+                const lenED = 60, dxB = E.x - B.x, dyB = E.y - B.y, distBE = Math.hypot(dxB, dyB);
                 const D = {x: E.x + (dxB / distBE) * lenED, y: E.y + (dyB / distBE) * lenED};
 
                 const lenEC = lenED * Math.sin(angleD * Math.PI / 180) / Math.sin(ans * Math.PI / 180);
-                const dxA = E.x - A.x, dyA = E.y - A.y;
-                const distAE = Math.hypot(dxA, dyA);
+                const dxA = E.x - A.x, dyA = E.y - A.y, distAE = Math.hypot(dxA, dyA);
                 const C = {x: E.x + (dxA / distAE) * lenEC, y: E.y + (dyA / distAE) * lenEC};
                 svg.innerHTML = `
                     <line x1="${A.x}" y1="${A.y}" x2="${C.x}" y2="${C.y}" stroke="#2d3748" stroke-width="2"/>
@@ -428,27 +428,22 @@
                     ${createAngleArc(A, B, E, 22, `${angleA}^\\circ`)} ${createAngleArc(B, E, A, 22, `${angleB}^\\circ`)}
                     ${createAngleArc(D, E, C, 22, `${angleD}^\\circ`)} ${createAngleArc(C, D, E, 22, 'x', '#2b6cb0')}
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>圖中 $AC$ 與 $BD$ 相交於 $E$，求未知角 $x$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>圖中 $AC$ 與 $BD$ 相交於 $E$，求未知角 $x$。" : "<b>Question: </b>In the figure, $AC$ and $BD$ intersect at $E$. Find the unknown angle $x$."}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\angle AEB + \\angle BAE + \\angle ABE &= 180^\\circ && (\\angle \\text{ sum of } \\Delta) \\\\
+                \\angle AEB + \\angle BAE + \\angle ABE &= 180^\\circ && (${txt.angle_sum_tri}) \\\\
                 \\angle AEB + ${angleA}^\\circ + ${angleB}^\\circ &= 180^\\circ \\\\
                 \\angle AEB &= ${angleAEB}^\\circ \\\\
-                \\angle CED &= \\angle AEB = ${angleAEB}^\\circ && (\\text{vert. opp. } \\angle\\text{s}) \\\\
-                x + \\angle CED + \\angle EDC &= 180^\\circ && (\\angle \\text{ sum of } \\Delta) \\\\
+                \\angle CED &= \\angle AEB = ${angleAEB}^\\circ && (${txt.vert_opp}) \\\\
+                x + \\angle CED + \\angle EDC &= 180^\\circ && (${txt.angle_sum_tri}) \\\\
                 x + ${angleAEB}^\\circ + ${angleD}^\\circ &= 180^\\circ \\\\
                 x &= ${ans}^\\circ
                 \\end{aligned}$$`;
             } else if (variant === 2) {
-                const topAngle = getRandomInt(45, 65), aefAngle = getRandomInt(50, 70);
-                const ans = topAngle + aefAngle;
-                const B = {x: 130, y: 220}, D = {x: 480, y: 220};
-                const radB = aefAngle * Math.PI / 180;
-                let h = 150;
-                let baseOffset = h / Math.tan(radB);
-                const A = {x: B.x + baseOffset, y: B.y - h};
-                const radC = Math.PI - (topAngle * Math.PI / 180) - radB;
-                const C = {x: A.x + h / Math.tan(radC), y: B.y};
+                const topAngle = getRandomInt(45, 65), aefAngle = getRandomInt(50, 70), ans = topAngle + aefAngle;
+                const B = {x: 130, y: 220}, D = {x: 480, y: 220}, radB = aefAngle * Math.PI / 180, h = 150;
+                const A = {x: B.x + h / Math.tan(radB), y: B.y - h};
+                const C = {x: A.x + h / Math.tan(Math.PI - (topAngle * Math.PI / 180) - radB), y: B.y};
                 const E = {x: (A.x + B.x)/2, y: (A.y + B.y)/2}, F = {x: (A.x + C.x)/2, y: (A.y + C.y)/2};
 
                 svg.innerHTML = `
@@ -462,29 +457,21 @@
                     ${createAngleArc(E, F, A, 25, `${aefAngle}^\\circ`, '#e53e3e', 15, 10)}
                     ${createAngleArc(C, A, D, 22, 'x', '#2b6cb0')}
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知 $BCD$ 為一直線，$E$ 與 $F$ 分別在 $AB$ 及 $AC$ 上，且 $EF // BD$。求未知外角 $x = \\angle ACD$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $BCD$ 為一直線，$E$ 與 $F$ 分別在 $AB$ 及 $AC$ 上，且 $EF // BD$。求未知外角 $x = \\angle ACD$。" : "<b>Question: </b>Given that $BCD$ is a straight line, $E$ and $F$ lie on $AB$ and $AC$ respectively, and $EF // BD$. Find the unknown exterior angle $x = \\angle ACD$."}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\angle ABC &= \\angle AEF = ${aefAngle}^\\circ && (\\text{corr. } \\angle\\text{s, } EF // BD) \\\\
-                x &= \\angle BAC + \\angle ABC && (\\text{ext. } \\angle \\text{ of } \\Delta) \\\\
+                \\angle ABC &= \\angle AEF = ${aefAngle}^\\circ && (${txt.corr_EF_BD}) \\\\
+                x &= \\angle BAC + \\angle ABC && (${txt.ext_angle_tri}) \\\\
                 x &= ${topAngle}^\\circ + ${aefAngle}^\\circ \\\\
                 x &= ${ans}^\\circ
                 \\end{aligned}$$`;
             } else if (variant === 3) {
-                const angleA = getRandomInt(55, 75);
-                const extABD = getRandomInt(115, 140);
-                const angleABC = 180 - extABD;
-                const ans = angleA + angleABC;
-
+                const angleA = getRandomInt(55, 75), extABD = getRandomInt(115, 140), angleABC = 180 - extABD, ans = angleA + angleABC;
                 const B = {x: 180, y: 190}, C = {x: 320, y: 190}, D = {x: 70, y: 190};
-                const radB = angleABC * Math.PI / 180, radA = angleA * Math.PI / 180;
-                const radC = Math.PI - radB - radA;
-                
-                let distBC = 120;
-                let h = distBC * Math.sin(radB) * Math.sin(radC) / Math.sin(radA);
+                const radB = angleABC * Math.PI / 180, radA = angleA * Math.PI / 180, radC = Math.PI - radB - radA;
+                let distBC = 120, h = distBC * Math.sin(radB) * Math.sin(radC) / Math.sin(radA);
                 if (h > 150) distBC *= (150 / h);
                 const distAB = distBC * Math.sin(radC) / Math.sin(radA);
-                
                 const A = {x: B.x + distAB * Math.cos(radB), y: B.y - distAB * Math.sin(radB)};
                 const E = getExtendedPoint(A, C, 80);
 
@@ -498,34 +485,25 @@
                     ${createAngleArc(A, C, B, 28, `${angleA}^\\circ`, '#e53e3e', 2, -2)}
                     ${createAngleArc(C, E, B, 22, 'x', '#2b6cb0')}
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知 $DBC$ 及 $ACE$ 均為一直線。求未知角 $x = \\angle BCE$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $DBC$ 及 $ACE$ 均為一直線。求未知角 $x = \\angle BCE$。" : "<b>Question: </b>Given that $DBC$ and $ACE$ are straight lines. Find the unknown angle $x = \\angle BCE$."}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\angle ABC + \\angle ABD &= 180^\\circ && (\\text{adj. } \\angle\\text{s on a st. line}) \\\\
+                \\angle ABC + \\angle ABD &= 180^\\circ && (${txt.adj_st_line}) \\\\
                 \\angle ABC &= 180^\\circ - ${extABD}^\\circ = ${angleABC}^\\circ \\\\
-                x &= \\angle BAC + \\angle ABC && (\\text{ext. } \\angle \\text{ of } \\Delta) \\\\
+                x &= \\angle BAC + \\angle ABC && (${txt.ext_angle_tri}) \\\\
                 x &= ${angleA}^\\circ + ${angleABC}^\\circ \\\\
                 x &= ${ans}^\\circ
                 \\end{aligned}$$`;
             } else {
-                const xAngle = getRandomInt(25, 40);
-                const angleB = getRandomInt(35, 55);
-                const angleACE = 2 * xAngle + angleB; 
-                
+                const xAngle = getRandomInt(25, 40), angleB = getRandomInt(35, 55), angleACE = 2 * xAngle + angleB; 
                 const B = {x: 100, y: 220}, C = {x: 320, y: 220}, E = {x: 450, y: 220};
-                const radB = angleB * Math.PI / 180;
-                const radC = Math.PI - (2 * xAngle * Math.PI / 180) - radB;
-                
-                let distBC = 220;
-                let h = distBC * Math.sin(radB) * Math.sin(radC) / Math.sin(2 * xAngle * Math.PI / 180);
+                const radB = angleB * Math.PI / 180, radC = Math.PI - (2 * xAngle * Math.PI / 180) - radB;
+                let distBC = 220, h = distBC * Math.sin(radB) * Math.sin(radC) / Math.sin(2 * xAngle * Math.PI / 180);
                 if(h > 160) distBC *= (160 / h);
-                
                 C.x = B.x + distBC;
                 const distAB = distBC * Math.sin(radC) / Math.sin(2 * xAngle * Math.PI / 180);
                 const A = {x: B.x + distAB * Math.cos(radB), y: B.y - distAB * Math.sin(radB)};
-                
-                const radDAB = xAngle * Math.PI / 180;
-                const angleADB = 180 - angleB - xAngle;
+                const radDAB = xAngle * Math.PI / 180, angleADB = 180 - angleB - xAngle;
                 const distBD = distAB * Math.sin(radDAB) / Math.sin(angleADB * Math.PI / 180);
                 const D = {x: B.x + distBD, y: 220};
 
@@ -539,18 +517,17 @@
                     ${createAngleArc(B, C, A, 25, `${angleB}^\\circ`)}
                     ${createAngleArc(C, A, E, 22, `${angleACE}^\\circ`)}
                     ${createAngleArc(A, B, D, 40, 'x', '#2b6cb0', -15, -10)} 
-                    ${createAngleArc(A, D, C, 40, '', '#2b6cb0')}
                     ${createArcTick(A, B, D, 40, '#2b6cb0')}
                     ${createArcTick(A, D, C, 40, '#2b6cb0')}
                 `;
 
-                qText.innerHTML = `${badge}<b>題目：</b>已知 $BCE$ 為一直線，$AD$ 是 $\\angle BAC$ 的角平分線（即 $\\angle BAD = \\angle DAC$）。求未知角 $x = \\angle BAD$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $BCE$ 為一直線，$AD$ 是 $\\angle BAC$ 的角平分線（即 $\\angle BAD = \\angle DAC$）。求未知角 $x = \\angle BAD$。" : "<b>Question: </b>Given that $BCE$ is a straight line, $AD$ is the angle bisector of $\\angle BAC$ (i.e., $\\angle BAD = \\angle DAC$). Find the unknown angle $x = \\angle BAD$."}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\angle BAC + \\angle ABC &= \\angle ACE && (\\text{ext. } \\angle \\text{ of } \\Delta) \\\\
+                \\angle BAC + \\angle ABC &= \\angle ACE && (${txt.ext_angle_tri}) \\\\
                 \\angle BAC + ${angleB}^\\circ &= ${angleACE}^\\circ \\\\
                 \\angle BAC &= ${2 * xAngle}^\\circ \\\\
-                \\because AD \\text{ bisects } \\angle BAC \\\\
+                \\because AD ${txt.bisects} \\angle BAC \\\\
                 \\therefore x &= \\frac{\\angle BAC}{2} \\\\
                 x &= \\frac{${2 * xAngle}^\\circ}{2} \\\\
                 x &= ${xAngle}^\\circ
@@ -560,9 +537,9 @@
     }
 
     // ==========================================
-    // 2. 等腰三角形 (4.2)
+    // 2. 等腰三角形
     // ==========================================
-    function generateIsosceles(svg, qText, solText, level, badge) {
+    function generateIsosceles(svg, qText, solText, level, badge, txt) {
         if (level === 1) {
             const vertexAngle = getRandomInt(40, 80), baseAngle = (180 - vertexAngle) / 2;
             const maxBase = 2 * 170 / Math.tan(baseAngle * Math.PI / 180);
@@ -578,21 +555,21 @@
                 ${createVertexLabel(A, 'A', 0, -15)} ${createVertexLabel(B, 'B', -12, 12)} ${createVertexLabel(C, 'C', 12, 12)}
                 ${createAngleArc(A, B, C, 22, `${vertexAngle}^\\circ`)} ${createAngleArc(B, C, A, 25, 'x', '#2b6cb0')}
             `;
-            qText.innerHTML = `${badge}<b>題目：</b>已知 $AB = AC$，求未知角 $x$。`;
-            solText.innerHTML = `<b>詳細解題步驟：</b>
+            qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $AB = AC$，求未知角 $x$。" : "<b>Question: </b>Given $AB = AC$, find the unknown angle $x$."}`;
+            solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
             $$\\begin{aligned}
             \\because AB &= AC \\\\
-            \\therefore \\angle ACB &= \\angle ABC = x && (\\text{base } \\angle\\text{s, isos. } \\Delta) \\\\
+            \\therefore \\angle ACB &= \\angle ABC = x && (${txt.base_isos}) \\\\
             x + x + \\angle BAC &= 180^\\circ && (\\angle\\text{ sum of } \\Delta) \\\\
             2x &= ${180 - vertexAngle}^\\circ \\\\
             x &= ${baseAngle}^\\circ
             \\end{aligned}$$`;
         } else {
-            generateIsoscelesVariants(svg, qText, solText, badge);
+            generateIsoscelesVariants(svg, qText, solText, badge, txt);
         }
     }
     
-    function generateIsoscelesVariants(svg, qText, solText, badge) {
+    function generateIsoscelesVariants(svg, qText, solText, badge, txt) {
         const variant = getRandomInt(1, 4);
         if (variant === 1) {
             const angleB = getRandomInt(50, 68), angleBAD = 180 - 2 * angleB, angleDAC = angleB / 2, ans = angleBAD + angleDAC;
@@ -614,15 +591,15 @@
                 ${createVertexLabel(D, 'D', 0, 15)} ${createVertexLabel(C, 'C', 12, 12)}
                 ${createAngleArc(B, C, A, 22, `${angleB}^\\circ`)} ${createAngleArc(A, B, C, 28, 'x', '#2b6cb0')}
             `;
-            qText.innerHTML = `${badge}<b>題目：</b>已知 $BDC$ 為一直線，$AB = AD$ 且 $AD = DC$。求未知角 $x = \\angle BAC$。`;
-            solText.innerHTML = `<b>詳細解題步驟：</b>
+            qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $BDC$ 為一直線，$AB = AD$ 且 $AD = DC$。求未知角 $x = \\angle BAC$。" : "<b>Question: </b>Given that $BDC$ is a straight line, $AB = AD$ and $AD = DC$. Find the unknown angle $x = \\angle BAC$."}`;
+            solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
             $$\\begin{aligned}
             \\because AB &= AD \\\\
-            \\therefore \\angle ADB &= \\angle ABD = ${angleB}^\\circ && (\\text{base } \\angle\\text{s, isos. } \\Delta) \\\\
+            \\therefore \\angle ADB &= \\angle ABD = ${angleB}^\\circ && (${txt.base_isos}) \\\\
             \\angle BAD &= 180^\\circ - ${angleB}^\\circ - ${angleB}^\\circ = ${angleBAD}^\\circ && (\\angle\\text{ sum of } \\Delta) \\\\
             \\because AD &= DC \\\\
-            \\therefore \\angle DAC &= \\angle ACD && (\\text{base } \\angle\\text{s, isos. } \\Delta) \\\\
-            \\angle ADB &= \\angle DAC + \\angle ACD && (\\text{ext. } \\angle \\text{ of } \\Delta) \\\\
+            \\therefore \\angle DAC &= \\angle ACD && (${txt.base_isos}) \\\\
+            \\angle ADB &= \\angle DAC + \\angle ACD && (${txt.ext_angle_tri}) \\\\
             ${angleB}^\\circ &= 2\\angle DAC \\\\
             \\angle DAC &= ${angleDAC}^\\circ \\\\
             x &= \\angle BAD + \\angle DAC \\\\
@@ -646,24 +623,20 @@
                 ${createVertexLabel(D, 'D', -12, -15)} ${createVertexLabel(E, 'E', 12, -15)}
                 ${createAngleArc(A, D, E, 22, `${vertexAngle}^\\circ`)} ${createAngleArc(D, E, A, 22, 'x', '#2b6cb0')}
             `;
-            qText.innerHTML = `${badge}<b>題目：</b>已知 $AB = AC$ 且 $DE // BC$，求未知角 $x = \\angle ADE$。`;
-            solText.innerHTML = `<b>詳細解題步驟：</b>
+            qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $AB = AC$ 且 $DE // BC$，求未知角 $x = \\angle ADE$。" : "<b>Question: </b>Given $AB = AC$ and $DE // BC$, find the unknown angle $x = \\angle ADE$."}`;
+            solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
             $$\\begin{aligned}
             \\because AB &= AC \\\\
-            \\therefore \\angle ABC &= \\angle ACB && (\\text{base } \\angle\\text{s, isos. } \\Delta) \\\\
+            \\therefore \\angle ABC &= \\angle ACB && (${txt.base_isos}) \\\\
             ${vertexAngle}^\\circ + 2\\angle ABC &= 180^\\circ \\\\
             \\angle ABC &= ${baseAngle}^\\circ \\\\
-            x &= \\angle ABC && (\\text{corr. } \\angle\\text{s, } DE // BC) \\\\
+            x &= \\angle ABC && (${txt.corr_DE_BC}) \\\\
             x &= ${baseAngle}^\\circ
             \\end{aligned}$$`;
         } else if (variant === 3) {
-            const angleC = getRandomInt(35, 45);
-            const angleABC = 180 - 2 * angleC;
-            const ans = angleABC - angleC;
-            const A = {x: 100, y: 220}, C = {x: 400, y: 220};
-            const radC = angleC * Math.PI / 180;
-            const height = 150 * Math.tan(radC);
-            const B = {x: 250, y: 220 - height};
+            const angleC = getRandomInt(35, 45), angleABC = 180 - 2 * angleC, ans = angleABC - angleC;
+            const A = {x: 100, y: 220}, C = {x: 400, y: 220}, radC = angleC * Math.PI / 180;
+            const height = 150 * Math.tan(radC), B = {x: 250, y: 220 - height};
             const lenBC = Math.hypot(C.x - B.x, C.y - B.y);
             const lenCD = lenBC * Math.sin(angleC * Math.PI / 180) / Math.sin((180 - 2*angleC) * Math.PI / 180);
             const D = {x: C.x - lenCD, y: 220};
@@ -680,13 +653,13 @@
                 ${createAngleArc(C, A, B, 25, `${angleC}^\\circ`)}
                 ${createAngleArc(B, D, A, 28, 'x', '#2b6cb0')}
             `;
-            qText.innerHTML = `${badge}<b>題目：</b>已知 $D$ 在 $AC$ 上，$AB = BC$ 且 $BD = CD$。求未知角 $x = \\angle ABD$。`;
-            solText.innerHTML = `<b>詳細解題步驟：</b>
+            qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $D$ 在 $AC$ 上，$AB = BC$ 且 $BD = CD$。求未知角 $x = \\angle ABD$。" : "<b>Question: </b>Given that $D$ lies on $AC$, $AB = BC$ and $BD = CD$. Find the unknown angle $x = \\angle ABD$."}`;
+            solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
             $$\\begin{aligned}
             \\because BD &= CD \\\\
-            \\therefore \\angle DBC &= \\angle C = ${angleC}^\\circ && (\\text{base } \\angle\\text{s, isos. } \\Delta) \\\\
+            \\therefore \\angle DBC &= \\angle C = ${angleC}^\\circ && (${txt.base_isos}) \\\\
             \\because AB &= BC \\\\
-            \\therefore \\angle A &= \\angle C = ${angleC}^\\circ && (\\text{base } \\angle\\text{s, isos. } \\Delta) \\\\
+            \\therefore \\angle A &= \\angle C = ${angleC}^\\circ && (${txt.base_isos}) \\\\
             \\angle ABC &= 180^\\circ - ${angleC}^\\circ - ${angleC}^\\circ = ${angleABC}^\\circ && (\\angle\\text{ sum of } \\Delta) \\\\
             x &= \\angle ABC - \\angle DBC \\\\
             x &= ${angleABC}^\\circ - ${angleC}^\\circ \\\\
@@ -697,8 +670,7 @@
             const maxBase = 2 * 140 / Math.tan(baseAngle * Math.PI / 180);
             const baseLen = Math.min(180, maxBase);
             const B = {x: 150, y: 220}, C = {x: 150 + baseLen, y: 220}, D = {x: C.x + 100, y: 220};
-            const height = (baseLen/2) * Math.tan(baseAngle * Math.PI / 180);
-            const A = {x: 150 + baseLen/2, y: 220 - height};
+            const height = (baseLen/2) * Math.tan(baseAngle * Math.PI / 180), A = {x: 150 + baseLen/2, y: 220 - height};
 
             svg.innerHTML = `
                 <line x1="${B.x}" y1="${B.y}" x2="${D.x}" y2="${D.y}" stroke="#2d3748" stroke-width="2"/>
@@ -711,13 +683,13 @@
                 ${createAngleArc(C, A, D, 22, `${extAngle}^\\circ`)}
                 ${createAngleArc(A, B, C, 25, 'x', '#2b6cb0')}
             `;
-            qText.innerHTML = `${badge}<b>題目：</b>已知 $AB = AC$ 且 $BCD$ 為一直線。求未知角 $x = \\angle BAC$。`;
-            solText.innerHTML = `<b>詳細解題步驟：</b>
+            qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $AB = AC$ 且 $BCD$ 為一直線。求未知角 $x = \\angle BAC$。" : "<b>Question: </b>Given that $AB = AC$ and $BCD$ is a straight line. Find the unknown angle $x = \\angle BAC$."}`;
+            solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
             $$\\begin{aligned}
-            \\angle ACB + \\angle ACD &= 180^\\circ && (\\text{adj. } \\angle\\text{s on a st. line}) \\\\
+            \\angle ACB + \\angle ACD &= 180^\\circ && (${txt.adj_st_line}) \\\\
             \\angle ACB &= 180^\\circ - ${extAngle}^\\circ = ${baseAngle}^\\circ \\\\
             \\because AB &= AC \\\\
-            \\therefore \\angle ABC &= \\angle ACB = ${baseAngle}^\\circ && (\\text{base } \\angle\\text{s, isos. } \\Delta) \\\\
+            \\therefore \\angle ABC &= \\angle ACB = ${baseAngle}^\\circ && (${txt.base_isos}) \\\\
             x + 2(${baseAngle}^\\circ) &= 180^\\circ && (\\angle\\text{ sum of } \\Delta) \\\\
             x &= ${vertexA}^\\circ
             \\end{aligned}$$`;
@@ -725,13 +697,11 @@
     }
 
     // ==========================================
-    // 3. 等邊三角形 (4.2)
+    // 3. 等邊三角形
     // ==========================================
-    function generateEquilateral(svg, qText, solText, level, badge) {
+    function generateEquilateral(svg, qText, solText, level, badge, txt) {
         if (level === 1) {
-            const B = {x: 160, y: 230}, C = {x: 360, y: 230};
-            const A = {x: 260, y: 230 - 200 * 0.866};
-
+            const B = {x: 160, y: 230}, C = {x: 360, y: 230}, A = {x: 260, y: 230 - 200 * 0.866};
             svg.innerHTML = `
                 <polygon points="${A.x},${A.y} ${B.x},${B.y} ${C.x},${C.y}" fill="none" stroke="#2d3748" stroke-width="2"/>
                 <line x1="205" y1="140" x2="215" y2="150" stroke="#e53e3e" stroke-width="2"/>
@@ -740,17 +710,13 @@
                 ${createVertexLabel(A, 'A', 0, -15)} ${createVertexLabel(B, 'B', -12, 12)} ${createVertexLabel(C, 'C', 12, 12)}
                 ${createAngleArc(B, C, A, 25, 'x', '#2b6cb0')}
             `;
-            qText.innerHTML = `${badge}<b>題目：</b>已知 $\\Delta ABC$ 為等邊三角形，求未知角 $x$。`;
-            solText.innerHTML = `<b>詳細解題步驟：</b>
-            $$\\begin{aligned}
-            x &= 60^\\circ && (\\text{prop. of equil. } \\Delta)
-            \\end{aligned}$$`;
+            qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $\\Delta ABC$ 為等邊三角形，求未知角 $x$。" : "<b>Question: </b>Given that $\\Delta ABC$ is an equilateral triangle, find the unknown angle $x$."}`;
+            solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}$$\\begin{aligned} x &= 60^\\circ && (${txt.prop_equil}) \\end{aligned}$$`;
         } else {
             const variant = getRandomInt(1, 3);
             if (variant === 1) {
                 const angleEBA = getRandomInt(20, 40), ans = 180 - 60 - angleEBA;
-                const B = {x: 160, y: 220}, C = {x: 360, y: 220};
-                const A = {x: 260, y: 220 - 200 * 0.866};
+                const B = {x: 160, y: 220}, C = {x: 360, y: 220}, A = {x: 260, y: 220 - 200 * 0.866};
                 const E = {x: 60, y: A.y}, F = {x: 460, y: A.y};
 
                 svg.innerHTML = `
@@ -762,11 +728,11 @@
                     ${createVertexLabel(A, 'A', 0, -15)} ${createVertexLabel(B, 'B', -12, 12)} ${createVertexLabel(C, 'C', 12, 12)}
                     ${createAngleArc(B, E, A, 22, `${angleEBA}^\\circ`)} ${createAngleArc(E, A, B, 22, 'x', '#2b6cb0')}
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知 $\\Delta ABC$ 為等邊三角形，直線 $EF // BC$ 穿過頂點 $A$。求未知角 $x = \\angle AEB$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $\\Delta ABC$ 為等邊三角形，直線 $EF // BC$ 穿過頂點 $A$。求未知角 $x = \\angle AEB$。" : "<b>Question: </b>Given that $\\Delta ABC$ is an equilateral triangle, line $EF // BC$ passes through vertex $A$. Find the unknown angle $x = \\angle AEB$."}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\angle ABC &= 60^\\circ && (\\text{prop. of equil. } \\Delta) \\\\
-                \\angle EAB &= \\angle ABC = 60^\\circ && (\\text{alt. } \\angle\\text{s, } EF // BC) \\\\
+                \\angle ABC &= 60^\\circ && (${txt.prop_equil}) \\\\
+                \\angle EAB &= \\angle ABC = 60^\\circ && (${txt.alt_EF_BC}) \\\\
                 x + \\angle EAB + \\angle EBA &= 180^\\circ && (\\angle\\text{ sum of } \\Delta) \\\\
                 x + 60^\\circ + ${angleEBA}^\\circ &= 180^\\circ \\\\
                 x &= ${ans}^\\circ
@@ -781,22 +747,17 @@
                     ${createVertexLabel(A, 'A', 0, -15)}
                     ${createAngleArc(B, D, A, 22, 'x', '#2b6cb0')}
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知 $DBC$ 為一直線且 $\\Delta ABC$ 為等邊三角形，求未知外角 $x = \\angle ABD$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $DBC$ 為一直線且 $\\Delta ABC$ 為等邊三角形，求未知外角 $x = \\angle ABD$。" : "<b>Question: </b>Given that $DBC$ is a straight line and $\\Delta ABC$ is an equilateral triangle, find the unknown exterior angle $x = \\angle ABD$."}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\angle ABC &= 60^\\circ && (\\text{prop. of equil. } \\Delta) \\\\
-                x + \\angle ABC &= 180^\\circ && (\\text{adj. } \\angle\\text{s on a st. line}) \\\\
+                \\angle ABC &= 60^\\circ && (${txt.prop_equil}) \\\\
+                x + \\angle ABC &= 180^\\circ && (${txt.adj_st_line}) \\\\
                 x + 60^\\circ &= 180^\\circ \\\\
                 x &= 120^\\circ
                 \\end{aligned}$$`;
             } else {
-                const angleBDC = getRandomInt(100, 140);
-                const angleDBC = (180 - angleBDC) / 2;
-                const ans = 60 + angleDBC;
-
-                const B = {x: 180, y: 150}, C = {x: 340, y: 150};
-                const A = {x: 260, y: 150 - 160 * 0.866};
-                B.y += 30; C.y += 30; A.y += 30; 
+                const angleBDC = getRandomInt(100, 140), angleDBC = (180 - angleBDC) / 2, ans = 60 + angleDBC;
+                const B = {x: 180, y: 180}, C = {x: 340, y: 180}, A = {x: 260, y: 180 - 160 * 0.866};
                 const D = {x: 260, y: B.y + 80 * Math.tan(angleDBC * Math.PI / 180)};
 
                 svg.innerHTML = `
@@ -809,14 +770,14 @@
                     ${createAngleArc(D, C, B, 22, `${angleBDC}^\\circ`)}
                     ${createAngleArc(B, C, A, 35, 'x', '#2b6cb0')}
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知 $\\Delta ABC$ 為等邊三角形，$\\Delta BDC$ 為等腰三角形且 $BD = CD$。求未知角 $x = \\angle ABD$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知 $\\Delta ABC$ 為等邊三角形，$\\Delta BDC$ 為等腰三角形且 $BD = CD$。求未知角 $x = \\angle ABD$。" : "<b>Question: </b>Given that $\\Delta ABC$ is an equilateral triangle, and $\\Delta BDC$ is an isosceles triangle with $BD = CD$. Find the unknown angle $x = \\angle ABD$."}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
                 \\because BD &= CD \\\\
-                \\therefore \\angle DBC &= \\angle DCB && (\\text{base } \\angle\\text{s, isos. } \\Delta) \\\\
+                \\therefore \\angle DBC &= \\angle DCB && (${txt.base_isos}) \\\\
                 2\\angle DBC + ${angleBDC}^\\circ &= 180^\\circ \\\\
                 \\angle DBC &= ${angleDBC}^\\circ \\\\
-                \\angle ABC &= 60^\\circ && (\\text{prop. of equil. } \\Delta) \\\\
+                \\angle ABC &= 60^\\circ && (${txt.prop_equil}) \\\\
                 x &= \\angle ABC + \\angle DBC \\\\
                 x &= 60^\\circ + ${angleDBC}^\\circ \\\\
                 x &= ${ans}^\\circ
@@ -826,9 +787,9 @@
     }
 
     // ==========================================
-    // 4. 等角對邊相等 (4.2)
+    // 4. 等角對邊相等
     // ==========================================
-    function generateSidesOpp(svg, qText, solText, level, badge) {
+    function generateSidesOpp(svg, qText, solText, level, badge, txt) {
         const sideLen = getRandomInt(8, 18);
         if (level === 1) {
             const angle = getRandomInt(50, 70);
@@ -842,28 +803,21 @@
                 <polygon points="${A.x},${A.y} ${B.x},${B.y} ${C.x},${C.y}" fill="none" stroke="#2d3748" stroke-width="2"/>
                 ${createVertexLabel(A, 'A', 0, -15)} ${createVertexLabel(B, 'B', -12, 12)} ${createVertexLabel(C, 'C', 12, 12)}
                 ${createAngleArc(B, C, A, 22, `${angle}^\\circ`)} ${createAngleArc(C, A, B, 22, `${angle}^\\circ`)}
-                <foreignObject x="${(A.x+B.x)/2 - 35}" y="${(A.y+B.y)/2 - 10}" width="80" height="30">
-                    <div xmlns="http://www.w3.org/1999/xhtml" class="math-label">$${sideLen}$ cm</div>
-                </foreignObject>
-                <foreignObject x="${(A.x+C.x)/2 - 5}" y="${(A.y+C.y)/2 - 10}" width="80" height="30">
-                    <div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:#2b6cb0;">$x$ cm</div>
-                </foreignObject>
+                <foreignObject x="${(A.x+B.x)/2 - 35}" y="${(A.y+B.y)/2 - 10}" width="80" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label">$${sideLen}$ cm</div></foreignObject>
+                <foreignObject x="${(A.x+C.x)/2 - 5}" y="${(A.y+C.y)/2 - 10}" width="80" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:#2b6cb0;">$x$ cm</div></foreignObject>
             `;
-            qText.innerHTML = `${badge}<b>題目：</b>已知 $\\angle ABC = \\angle ACB = ${angle}^\\circ$ 且 $AB = ${sideLen}\\text{ cm}$，求未知邊長 $x$。`;
-            solText.innerHTML = `<b>詳細解題步驟：</b>
+            qText.innerHTML = `${badge}${lang === "zh" ? `<b>題目：</b>已知 $\\angle ABC = \\angle ACB = ${angle}^\\circ$ 且 $AB = ${sideLen}\\text{ cm}$，求未知邊長 $x$。` : `<b>Question: </b>Given $\\angle ABC = \\angle ACB = ${angle}^\\circ$ and $AB = ${sideLen}\\text{ cm}$, find the unknown side length $x$.`}`;
+            solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
             $$\\begin{aligned}
             \\because \\angle ABC &= \\angle ACB = ${angle}^\\circ \\\\
-            \\therefore AC &= AB && (\\text{sides opp., equal } \\angle\\text{s}) \\\\
+            \\therefore AC &= AB && (${txt.sides_opp}) \\\\
             x &= ${sideLen}
             \\end{aligned}$$`;
         } else {
             const variant = getRandomInt(1, 3);
             if (variant === 1) {
-                const angle = getRandomInt(50, 70);
-                const maxBase = 2 * 140 / Math.tan(angle * Math.PI / 180);
-                const baseLen = Math.min(220, maxBase);
-                const B = {x: 260 - baseLen/2, y: 220}, C = {x: 260 + baseLen/2, y: 220};
-                const height = (baseLen/2) * Math.tan(angle * Math.PI / 180);
+                const angle = getRandomInt(50, 70), maxBase = 2 * 140 / Math.tan(angle * Math.PI / 180), baseLen = Math.min(220, maxBase);
+                const B = {x: 260 - baseLen/2, y: 220}, C = {x: 260 + baseLen/2, y: 220}, height = (baseLen/2) * Math.tan(angle * Math.PI / 180);
                 const A = {x: 260, y: 220 - height}, E = {x: 80, y: A.y}, F = {x: 440, y: A.y};
 
                 svg.innerHTML = `
@@ -873,32 +827,20 @@
                     ${createVertexLabel(E, 'E', -12, -10)} ${createVertexLabel(F, 'F', 12, -10)}
                     ${createVertexLabel(A, 'A', 0, -15)} ${createVertexLabel(B, 'B', -12, 12)} ${createVertexLabel(C, 'C', 12, 12)}
                     ${createAngleArc(A, E, B, 22, `${angle}^\\circ`)} ${createAngleArc(C, A, B, 22, `${angle}^\\circ`)}
-                    <foreignObject x="${(A.x+B.x)/2 - 35}" y="${(A.y+B.y)/2 - 10}" width="80" height="30">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="math-label">$${sideLen}$ cm</div>
-                    </foreignObject>
-                    <foreignObject x="${(A.x+C.x)/2 - 5}" y="${(A.y+C.y)/2 - 10}" width="80" height="30">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:#2b6cb0;">$x$ cm</div>
-                    </foreignObject>
+                    <foreignObject x="${(A.x+B.x)/2 - 35}" y="${(A.y+B.y)/2 - 10}" width="80" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label">$${sideLen}$ cm</div></foreignObject>
+                    <foreignObject x="${(A.x+C.x)/2 - 5}" y="${(A.y+C.y)/2 - 10}" width="80" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:#2b6cb0;">$x$ cm</div></foreignObject>
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知 $EF // BC$，$AB = ${sideLen}\\text{ cm}$，$\\angle EAB = ${angle}^\\circ$，$\\angle ACB = ${angle}^\\circ$。求未知邊長 $x$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? `<b>題目：</b>已知 $EF // BC$，$AB = ${sideLen}\\text{ cm}$，$\\angle EAB = ${angle}^\\circ$，$\\angle ACB = ${angle}^\\circ$。求未知邊長 $x$。` : `<b>Question: </b>Given $EF // BC$, $AB = ${sideLen}\\text{ cm}$, $\\angle EAB = ${angle}^\\circ$, and $\\angle ACB = ${angle}^\\circ$. Find the unknown side length $x$.`}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\angle ABC &= \\angle EAB = ${angle}^\\circ && (\\text{alt. } \\angle\\text{s, } EF // BC) \\\\
+                \\angle ABC &= \\angle EAB = ${angle}^\\circ && (${txt.alt_EF_BC}) \\\\
                 \\because \\angle ABC &= \\angle ACB = ${angle}^\\circ \\\\
-                \\therefore AC &= AB && (\\text{sides opp., equal } \\angle\\text{s}) \\\\
+                \\therefore AC &= AB && (${txt.sides_opp}) \\\\
                 x &= ${sideLen}
                 \\end{aligned}$$`;
             } else if (variant === 2) {
-                const angle = getRandomInt(40, 75);
-                const extAngle = 180 - angle;
-                const L = 140; 
-                const angleB_deg = 180 - 2 * angle;
-                const radB = angleB_deg * Math.PI / 180;
-                
-                const B = {x: 160, y: 220};
-                const C = {x: B.x + L, y: 220};
-                const D = {x: C.x + 90, y: 220};
-                const A = {x: B.x + L * Math.cos(radB), y: B.y - L * Math.sin(radB)};
+                const angle = getRandomInt(40, 75), extAngle = 180 - angle, L = 140, radB = (180 - 2 * angle) * Math.PI / 180;
+                const B = {x: 160, y: 220}, C = {x: B.x + L, y: 220}, D = {x: C.x + 90, y: 220}, A = {x: B.x + L * Math.cos(radB), y: B.y - L * Math.sin(radB)};
 
                 svg.innerHTML = `
                     <line x1="${B.x}" y1="${B.y}" x2="${D.x}" y2="${D.y}" stroke="#2d3748" stroke-width="2"/>
@@ -906,32 +848,22 @@
                     ${createVertexLabel(A, 'A', 0, -15)} ${createVertexLabel(B, 'B', -12, 12)}
                     ${createVertexLabel(C, 'C', 0, 15)} ${createVertexLabel(D, 'D', 12, 12)}
                     ${createAngleArc(C, A, D, 22, `${extAngle}^\\circ`)} ${createAngleArc(A, B, C, 22, `${angle}^\\circ`)}
-                    <foreignObject x="${(A.x+B.x)/2 - 35}" y="${(A.y+B.y)/2 - 25}" width="80" height="30">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="math-label">$${sideLen}$ cm</div>
-                    </foreignObject>
-                    <foreignObject x="${(B.x+C.x)/2 - 20}" y="${B.y + 5}" width="80" height="30">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:#2b6cb0;">$x$ cm</div>
-                    </foreignObject>
+                    <foreignObject x="${(A.x+B.x)/2 - 35}" y="${(A.y+B.y)/2 - 25}" width="80" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label">$${sideLen}$ cm</div></foreignObject>
+                    <foreignObject x="${(B.x+C.x)/2 - 20}" y="${B.y + 5}" width="80" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:#2b6cb0;">$x$ cm</div></foreignObject>
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知 $BCD$ 為一直線，$\\angle BAC = ${angle}^\\circ$ 且外角 $\\angle ACD = ${extAngle}^\\circ$。若 $AB = ${sideLen}\\text{ cm}$，求 $x = BC$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? `<b>題目：</b>已知 $BCD$ 為一直線，$\\angle BAC = ${angle}^\\circ$ 且外角 $\\angle ACD = ${extAngle}^\\circ$。若 $AB = ${sideLen}\\text{ cm}$，求 $x = BC$。` : `<b>Question: </b>Given that $BCD$ is a straight line, $\\angle BAC = ${angle}^\\circ$ and the exterior angle $\\angle ACD = ${extAngle}^\\circ$. If $AB = ${sideLen}\\text{ cm}$, find $x = BC$.`}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\angle ACB + \\angle ACD &= 180^\\circ && (\\text{adj. } \\angle\\text{s on a st. line}) \\\\
+                \\angle ACB + \\angle ACD &= 180^\\circ && (${txt.adj_st_line}) \\\\
                 \\angle ACB &= 180^\\circ - ${extAngle}^\\circ = ${angle}^\\circ \\\\
                 \\because \\angle BAC &= \\angle ACB = ${angle}^\\circ \\\\
-                \\therefore BC &= AB && (\\text{sides opp., equal } \\angle\\text{s}) \\\\
+                \\therefore BC &= AB && (${txt.sides_opp}) \\\\
                 x &= ${sideLen}
                 \\end{aligned}$$`;
             } else {
-                const angle = getRandomInt(25, 35);
-                const B = {x: 80, y: 220};
-                const L = 110; 
-                const rad2 = 2 * angle * Math.PI / 180;
-                const E = {x: B.x + L * Math.cos(rad2), y: B.y - L * Math.sin(rad2)};
-                const D = {x: E.x + L, y: E.y};
-                const A = {x: E.x + 40 * Math.cos(rad2), y: E.y - 40 * Math.sin(rad2)};
-                const t = (B.y - A.y) / (D.y - A.y);
-                const C = {x: A.x + t * (D.x - A.x), y: B.y};
+                const angle = getRandomInt(25, 35), B = {x: 80, y: 220}, L = 110, rad2 = 2 * angle * Math.PI / 180;
+                const E = {x: B.x + L * Math.cos(rad2), y: B.y - L * Math.sin(rad2)}, D = {x: E.x + L, y: E.y};
+                const A = {x: E.x + 40 * Math.cos(rad2), y: E.y - 40 * Math.sin(rad2)}, t = (B.y - A.y) / (D.y - A.y), C = {x: A.x + t * (D.x - A.x), y: B.y};
 
                 svg.innerHTML = `
                     <polygon points="${A.x},${A.y} ${B.x},${B.y} ${C.x},${C.y}" fill="none" stroke="#2d3748" stroke-width="2"/>
@@ -941,20 +873,16 @@
                     ${createVertexLabel(A, 'A', 0, -15)} ${createVertexLabel(B, 'B', -12, 12)} ${createVertexLabel(C, 'C', 12, 12)}
                     ${createVertexLabel(E, 'E', -15, -10)} ${createVertexLabel(D, 'D', 15, -10)}
                     ${createAngleArc(B, C, D, 30, `${angle}^\\circ`)} ${createAngleArc(B, D, E, 30, `${angle}^\\circ`)}
-                    <foreignObject x="${(E.x+B.x)/2 - 55}" y="${(E.y+B.y)/2 - 25}" width="80" height="30">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="math-label">$${sideLen}$ cm</div>
-                    </foreignObject>
-                    <foreignObject x="${(E.x+D.x)/2 - 20}" y="${E.y - 35}" width="80" height="30">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:#2b6cb0;">$x$ cm</div>
-                    </foreignObject>
+                    <foreignObject x="${(E.x+B.x)/2 - 55}" y="${(E.y+B.y)/2 - 25}" width="80" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label">$${sideLen}$ cm</div></foreignObject>
+                    <foreignObject x="${(E.x+D.x)/2 - 20}" y="${E.y - 35}" width="80" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="color:#2b6cb0;">$x$ cm</div></foreignObject>
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知 $\\Delta ABC$ 中，$E$ 位於 $AB$ 上且 $ED // BC$。$BD$ 是 $\\angle ABC$ 的角平分線。若 $EB = ${sideLen}\\text{ cm}$，求 $x = ED$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? `<b>題目：</b>已知 $\\Delta ABC$ 中，$E$ 位於 $AB$ 上且 $ED // BC$。$BD$ 是 $\\angle ABC$ 的角平分線。若 $EB = ${sideLen}\\text{ cm}$，求 $x = ED$。` : `<b>Question: </b>In $\\Delta ABC$, $E$ lies on $AB$ and $ED // BC$. $BD$ is the angle bisector of $\\angle ABC$. If $EB = ${sideLen}\\text{ cm}$, find $x = ED$.`}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\angle EDB &= \\angle DBC && (\\text{alt. } \\angle\\text{s, } ED // BC) \\\\
-                \\angle EBD &= \\angle DBC && (\\text{given}) \\\\
+                \\angle EDB &= \\angle DBC && (${txt.alt_ED_BC}) \\\\
+                \\angle EBD &= \\angle DBC && (${txt.given}) \\\\
                 \\therefore \\angle EDB &= \\angle EBD \\\\
-                ED &= EB && (\\text{sides opp., equal } \\angle\\text{s}) \\\\
+                ED &= EB && (${txt.sides_opp}) \\\\
                 x &= ${sideLen}
                 \\end{aligned}$$`;
             }
@@ -962,60 +890,37 @@
     }
 
     // ==========================================
-    // 5. 多邊形內角和 (4.3)
+    // 5. 多邊形內角和
     // ==========================================
-    function generatePolygonInt(svg, qText, solText, level, badge) {
+    function generatePolygonInt(svg, qText, solText, level, badge, txt) {
         if (level === 1) {
-            const n = getRandomInt(4, 6);
-            const sum = (n - 2) * 180;
-            let angles = [];
-            let currentSum = 0;
-            for (let i = 0; i < n - 1; i++) {
-                let a = getRandomInt(Math.floor(sum/n) - 15, Math.floor(sum/n) + 15);
-                angles.push(a);
-                currentSum += a;
-            }
+            const n = getRandomInt(4, 6), sum = (n - 2) * 180;
+            let angles = [], currentSum = 0;
+            for (let i = 0; i < n - 1; i++) { let a = getRandomInt(Math.floor(sum/n) - 15, Math.floor(sum/n) + 15); angles.push(a); currentSum += a; }
             const ans = sum - currentSum;
             
-            const cx = 260, cy = 140, R = 100, pts = [];
-            const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
-            for(let i = 0; i < n; i++) {
-                pts.push({
-                    x: cx + R * Math.cos((-90 + i * (360/n)) * Math.PI / 180), 
-                    y: cy + R * Math.sin((-90 + i * (360/n)) * Math.PI / 180)
-                });
-            }
+            const cx = 260, cy = 140, R = 100, pts = [], labels = ['A', 'B', 'C', 'D', 'E', 'F'];
+            for(let i = 0; i < n; i++) pts.push({ x: cx + R * Math.cos((-90 + i * (360/n)) * Math.PI / 180), y: cy + R * Math.sin((-90 + i * (360/n)) * Math.PI / 180) });
             
-            let polySvg = `<polygon points="${pts.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>`;
-            let arcsSvg = '';
-            let labelsSvg = '';
-            let sumStr = '';
+            let polySvg = `<polygon points="${pts.map(p => p.x + ',' + p.y).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>`;
+            let arcsSvg = '', labelsSvg = '', sumStr = '';
             
             for (let i = 0; i < n; i++) {
                 let a = Math.atan2(pts[i].y - cy, pts[i].x - cx);
                 labelsSvg += createVertexLabel({x: pts[i].x + 15*Math.cos(a), y: pts[i].y + 15*Math.sin(a)}, labels[i], -5, -5);
-                
-                let v = pts[i];
-                let p1 = pts[(i-1+n)%n];
-                let p2 = pts[(i+1)%n];
-                
-                if (i === 0) {
-                    arcsSvg += createAngleArc(v, p1, p2, 22, 'x', '#2b6cb0');
-                } else {
-                    arcsSvg += createAngleArc(v, p1, p2, 22, `${angles[i-1]}^\\circ`);
-                    sumStr += `${angles[i-1]}^\\circ + `;
-                }
+                let v = pts[i], p1 = pts[(i-1+n)%n], p2 = pts[(i+1)%n];
+                if (i === 0) arcsSvg += createAngleArc(v, p1, p2, 22, 'x', '#2b6cb0');
+                else { arcsSvg += createAngleArc(v, p1, p2, 22, `${angles[i-1]}^\\circ`); sumStr += `${angles[i-1]}^\\circ + `; }
             }
             sumStr = sumStr.slice(0, -3);
-            
-            let polyName = n === 4 ? '四邊形' : (n === 5 ? '五邊形' : '六邊形');
+            let polyName = lang === 'zh' ? (n === 4 ? '四邊形' : (n === 5 ? '五邊形' : '六邊形')) : (n === 4 ? 'quadrilateral' : (n === 5 ? 'pentagon' : 'hexagon'));
             let polyStr = labels.slice(0, n).join('');
             
             svg.innerHTML = polySvg + arcsSvg + labelsSvg;
-            qText.innerHTML = `${badge}<b>題目：</b>求圖中${polyName} $${polyStr}$ 的未知內角 $x$。`;
-            solText.innerHTML = `<b>詳細解題步驟：</b>
+            qText.innerHTML = `${badge}${lang === "zh" ? `<b>題目：</b>求圖中${polyName} $${polyStr}$ 的未知內角 $x$。` : `<b>Question: </b>Find the unknown interior angle $x$ of the ${polyName} $${polyStr}$ in the figure.`}`;
+            solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
             $$\\begin{aligned}
-            \\text{Sum of int. } \\angle\\text{s of polygon} &= (${n} - 2) \\times 180^\\circ = ${sum}^\\circ && (\\text{sum of polygon}) \\\\
+            ${txt.sum_int_poly_text} &= (${n} - 2) \\times 180^\\circ = ${sum}^\\circ && (${txt.sum_poly}) \\\\
             x + ${sumStr} &= ${sum}^\\circ \\\\
             x + ${currentSum}^\\circ &= ${sum}^\\circ \\\\
             x &= ${ans}^\\circ
@@ -1027,19 +932,19 @@
                 for(let i=0; i<5; i++) pts.push({x: cx + R * Math.cos((-90 + i * 72) * Math.PI / 180), y: cy + R * Math.sin((-90 + i * 72) * Math.PI / 180)});
                 const [A, B, C, D, E] = pts;
                 svg.innerHTML = `
-                    <polygon points="${pts.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
+                    <polygon points="${pts.map(p => p.x + ',' + p.y).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
                     <line x1="${A.x}" y1="${A.y}" x2="${C.x}" y2="${C.y}" stroke="#2b6cb0" stroke-width="1.8" stroke-dasharray="4,4"/>
                     ${createVertexLabel(A, 'A', 0, -15)} ${createVertexLabel(B, 'B', 12, -5)}
                     ${createVertexLabel(C, 'C', 12, 12)} ${createVertexLabel(D, 'D', -12, 12)} ${createVertexLabel(E, 'E', -12, -5)}
                     ${createAngleArc(A, C, B, 30, 'x', '#2b6cb0')}
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>圖中 $ABCDE$ 為一正五邊形 (Regular pentagon)，連接 $AC$。求未知角 $x = \\angle BAC$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>圖中 $ABCDE$ 為一正五邊形 (Regular pentagon)，連接 $AC$。求未知角 $x = \\angle BAC$。" : "<b>Question: </b>In the figure, $ABCDE$ is a regular pentagon, and $AC$ is joined. Find the unknown angle $x = \\angle BAC$."}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\text{Int. } \\angle \\text{ of reg. pentagon} &= \\frac{(5 - 2) \\times 180^\\circ}{5} = 108^\\circ && (\\text{sum of polygon}) \\\\
+                ${txt.int_reg_pentagon} &= \\frac{(5 - 2) \\times 180^\\circ}{5} = 108^\\circ && (${txt.sum_poly}) \\\\
                 \\angle ABC &= 108^\\circ \\\\
                 \\because AB &= BC \\\\
-                \\therefore \\angle BAC &= \\angle BCA = x && (\\text{base } \\angle\\text{s, isos. } \\Delta) \\\\
+                \\therefore \\angle BAC &= \\angle BCA = x && (${txt.base_isos}) \\\\
                 2x + 108^\\circ &= 180^\\circ && (\\angle\\text{ sum of } \\Delta) \\\\
                 x &= 36^\\circ
                 \\end{aligned}$$`;
@@ -1052,10 +957,10 @@
                     ${createAngleArc(A, E, B, 20, 'x', '#2b6cb0')} ${createAngleArc(B, A, C, 20, '110^\\circ')}
                     ${createAngleArc(C, B, D, 20, '120^\\circ')} ${createAngleArc(D, C, E, 20, '100^\\circ')} ${createAngleArc(E, D, A, 20, '105^\\circ')}
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知五邊形 $ABCDE$ 的四個內角分別為 $110^\\circ, 120^\\circ, 100^\\circ, 105^\\circ$，求未知內角 $x$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知五邊形 $ABCDE$ 的四個內角分別為 $110^\\circ, 120^\\circ, 100^\\circ, 105^\\circ$，求未知內角 $x$。" : "<b>Question: </b>Given that four interior angles of pentagon $ABCDE$ are $110^\\circ, 120^\\circ, 100^\\circ, 105^\\circ$ respectively, find the unknown interior angle $x$."}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\text{Sum of int. } \\angle\\text{s of pentagon} &= (5 - 2) \\times 180^\\circ = 540^\\circ && (\\text{sum of polygon}) \\\\
+                ${txt.sum_int_pentagon} &= (5 - 2) \\times 180^\\circ = 540^\\circ && (${txt.sum_poly}) \\\\
                 x + 110^\\circ + 120^\\circ + 100^\\circ + 105^\\circ &= 540^\\circ \\\\
                 x &= 105^\\circ
                 \\end{aligned}$$`;
@@ -1064,7 +969,7 @@
                 for(let i=0; i<6; i++) pts.push({x: cx + R * Math.cos((-90 + i * 60) * Math.PI / 180), y: cy + R * Math.sin((-90 + i * 60) * Math.PI / 180)});
                 const [A, B, C, D, E, F] = pts;
                 svg.innerHTML = `
-                    <polygon points="${pts.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
+                    <polygon points="${pts.map(p => p.x + ',' + p.y).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
                     ${createVertexLabel(A, 'A', 0, -15)} ${createVertexLabel(B, 'B', 15, -5)}
                     ${createVertexLabel(C, 'C', 15, 12)} ${createVertexLabel(D, 'D', 0, 15)} 
                     ${createVertexLabel(E, 'E', -15, 12)} ${createVertexLabel(F, 'F', -15, -5)}
@@ -1075,71 +980,45 @@
                     ${createAngleArc(E, D, F, 25, '2x-10^\\circ', '#e53e3e', -10, -5)} 
                     ${createAngleArc(F, E, A, 25, '2x-20^\\circ', '#e53e3e', -15, -10)}
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知六邊形 $ABCDEF$ 中各內角如圖所示。求未知數 $x$ 的值。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>已知六邊形 $ABCDEF$ 中各內角如圖所示。求未知數 $x$ 的值。" : "<b>Question: </b>Given the interior angles of hexagon $ABCDEF$ as shown in the figure. Find the value of $x$."}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\text{Sum of int. } \\angle\\text{s of hexagon} &= (6 - 2) \\times 180^\\circ = 720^\\circ && (\\text{sum of polygon}) \\\\
+                ${txt.sum_int_hexagon} &= (6 - 2) \\times 180^\\circ = 720^\\circ && (${txt.sum_poly}) \\\\
                 x + (x+10) + (x+20) + 2x + (2x-10) + (2x-20) &= 720^\\circ \\\\
                 8x &= 720^\\circ \\\\
                 x &= 90^\\circ
                 \\end{aligned}$$`;
             } else {
                 const validPairs = [[4, 5], [4, 6], [4, 8], [5, 6], [5, 8], [6, 8]];
-                const pair = validPairs[getRandomInt(0, validPairs.length - 1)];
-                const n1 = pair[0], n2 = pair[1];
-                
-                let L = 70;
+                const pair = validPairs[getRandomInt(0, validPairs.length - 1)], n1 = pair[0], n2 = pair[1], L = 70;
                 let A = {x: 260, y: 110}, B = {x: 260, y: 110 + L};
                 
                 function getPoly(ptA, ptB, n, sign) {
-                    let pts = [ptA, ptB];
-                    let dir = Math.atan2(ptB.y - ptA.y, ptB.x - ptA.x);
-                    let ext = (360 / n) * Math.PI / 180;
-                    let currentDir = dir;
-                    for(let i=0; i<n-2; i++) {
-                        currentDir += sign * ext;
-                        let last = pts[pts.length-1];
-                        pts.push({x: last.x + L * Math.cos(currentDir), y: last.y + L * Math.sin(currentDir)});
-                    }
+                    let pts = [ptA, ptB], dir = Math.atan2(ptB.y - ptA.y, ptB.x - ptA.x), ext = (360 / n) * Math.PI / 180, currentDir = dir;
+                    for(let i=0; i<n-2; i++) { currentDir += sign * ext; let last = pts[pts.length-1]; pts.push({x: last.x + L * Math.cos(currentDir), y: last.y + L * Math.sin(currentDir)}); }
                     return pts;
                 }
+                let poly1 = getPoly(A, B, n1, 1), poly2 = getPoly(A, B, n2, -1), P = poly1[poly1.length - 1], Q = poly2[poly2.length - 1];
                 
-                let poly1 = getPoly(A, B, n1, 1);
-                let poly2 = getPoly(A, B, n2, -1);
-                
-                let P = poly1[poly1.length - 1];
-                let Q = poly2[poly2.length - 1];
-                
-                const polyNames = {
-                    4: '正方形 (Square)',
-                    5: '正五邊形 (Regular pentagon)',
-                    6: '正六邊形 (Regular hexagon)',
-                    8: '正八邊形 (Regular octagon)'
-                };
-                
-                let int1 = (n1 - 2) * 180 / n1;
-                let int2 = (n2 - 2) * 180 / n2;
-                let paq = 360 - int1 - int2;
-                let ans = (180 - paq) / 2;
+                const polyNames = { 4: lang === 'zh' ? '正方形 (Square)' : 'square', 5: lang === 'zh' ? '正五邊形 (Regular pentagon)' : 'regular pentagon', 6: lang === 'zh' ? '正六邊形 (Regular hexagon)' : 'regular hexagon', 8: lang === 'zh' ? '正八邊形 (Regular octagon)' : 'regular octagon' };
+                let int1 = (n1 - 2) * 180 / n1, int2 = (n2 - 2) * 180 / n2, paq = 360 - int1 - int2, ans = (180 - paq) / 2;
                 
                 svg.innerHTML = `
-                    <polygon points="${poly1.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
-                    <polygon points="${poly2.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
+                    <polygon points="${poly1.map(p => p.x + ',' + p.y).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
+                    <polygon points="${poly2.map(p => p.x + ',' + p.y).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
                     <line x1="${P.x}" y1="${P.y}" x2="${Q.x}" y2="${Q.y}" stroke="#2b6cb0" stroke-width="2" stroke-dasharray="4,4"/>
-                    ${createVertexLabel(A, 'A', 0, -15)}
-                    ${createVertexLabel(B, 'B', 0, 15)}
-                    ${createVertexLabel(P, 'P', -15, -15)}
-                    ${createVertexLabel(Q, 'Q', 15, -15)}
+                    ${createVertexLabel(A, 'A', 0, -15)} ${createVertexLabel(B, 'B', 0, 15)}
+                    ${createVertexLabel(P, 'P', -15, -15)} ${createVertexLabel(Q, 'Q', 15, -15)}
                     ${createAngleArc(P, A, Q, 25, 'x', '#2b6cb0', -5, -5)}
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>圖中有兩個正多邊形並列，分別是${polyNames[n1]}及${polyNames[n2]}，它們共用邊 $AB$。求未知角 $x = \\angle APQ$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? `<b>題目：</b>圖中有兩個正多邊形並列，分別是${polyNames[n1]}及${polyNames[n2]}，它們共用邊 $AB$。求未知角 $x = \\angle APQ$。` : `<b>Question: </b>Two regular polygons, a ${polyNames[n1]} and a ${polyNames[n2]}, are placed side by side sharing the side $AB$. Find the unknown angle $x = \\angle APQ$.`}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\text{Int. } \\angle \\text{ of } ${n1}\\text{-gon} &= \\frac{(${n1} - 2) \\times 180^\\circ}{${n1}} = ${int1}^\\circ \\\\
-                \\text{Int. } \\angle \\text{ of } ${n2}\\text{-gon} &= \\frac{(${n2} - 2) \\times 180^\\circ}{${n2}} = ${int2}^\\circ \\\\
+                ${txt.int_angle_of(n1)} &= \\frac{(${n1} - 2) \\times 180^\\circ}{${n1}} = ${int1}^\\circ \\\\
+                ${txt.int_angle_of(n2)} &= \\frac{(${n2} - 2) \\times 180^\\circ}{${n2}} = ${int2}^\\circ \\\\
                 \\angle PAQ &= 360^\\circ - ${int1}^\\circ - ${int2}^\\circ = ${paq}^\\circ \\\\
-                \\because AP &= AB = AQ \\text{ (sides of regular polygons)} \\\\
-                \\therefore \\angle AQP &= \\angle APQ = x && (\\text{base } \\angle\\text{s, isos. } \\Delta) \\\\
+                \\because AP &= AB = AQ ${txt.reg_poly_sides} \\\\
+                \\therefore \\angle AQP &= \\angle APQ = x && (${txt.base_isos}) \\\\
                 2x + ${paq}^\\circ &= 180^\\circ && (\\angle\\text{ sum of } \\Delta) \\\\
                 2x &= ${180 - paq}^\\circ \\\\
                 x &= ${ans}^\\circ
@@ -1149,64 +1028,43 @@
     }
 
     // ==========================================
-    // 6. 多邊形外角和 (4.3)
+    // 6. 多邊形外角和
     // ==========================================
-    function generatePolygonExt(svg, qText, solText, level, badge) {
+    function generatePolygonExt(svg, qText, solText, level, badge, txt) {
         if (level === 1) {
             const n = getRandomInt(4, 6);
-            let extAngles = [];
-            let currentSum = 0;
-            for (let i = 0; i < n - 1; i++) {
-                let a = getRandomInt(Math.floor(360/n) - 15, Math.floor(360/n) + 15);
-                extAngles.push(a);
-                currentSum += a;
-            }
+            let extAngles = [], currentSum = 0;
+            for (let i = 0; i < n - 1; i++) { let a = getRandomInt(Math.floor(360/n) - 15, Math.floor(360/n) + 15); extAngles.push(a); currentSum += a; }
             const ans = 360 - currentSum;
             
-            const cx = 260, cy = 140, R = 90, pts = [];
-            const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
-            const extNames = ['P', 'Q', 'R', 'S', 'T', 'U'];
-            for(let i = 0; i < n; i++) {
-                pts.push({
-                    x: cx + R * Math.cos((-90 + i * (360/n)) * Math.PI / 180), 
-                    y: cy + R * Math.sin((-90 + i * (360/n)) * Math.PI / 180)
-                });
-            }
+            const cx = 260, cy = 140, R = 90, pts = [], labels = ['A', 'B', 'C', 'D', 'E', 'F'], extNames = ['P', 'Q', 'R', 'S', 'T', 'U'];
+            for(let i = 0; i < n; i++) pts.push({ x: cx + R * Math.cos((-90 + i * (360/n)) * Math.PI / 180), y: cy + R * Math.sin((-90 + i * (360/n)) * Math.PI / 180) });
             
-            let polySvg = `<polygon points="${pts.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>`;
+            let polySvg = `<polygon points="${pts.map(p => p.x + ',' + p.y).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>`;
             let extLinesSvg = '', arcsSvg = '', labelsSvg = '', extPts = [], sumStr = '';
             
             for (let i = 0; i < n; i++) {
-                let e = getExtendedPoint(pts[i], pts[(i + 1) % n], 50);
-                extPts.push(e);
+                let e = getExtendedPoint(pts[i], pts[(i + 1) % n], 50); extPts.push(e);
                 extLinesSvg += `<line x1="${pts[(i+1)%n].x}" y1="${pts[(i+1)%n].y}" x2="${e.x}" y2="${e.y}" stroke="#718096" stroke-width="1.8" stroke-dasharray="4,4"/>`;
-                
                 let a = Math.atan2(pts[i].y - cy, pts[i].x - cx);
                 labelsSvg += createVertexLabel({x: pts[i].x + 15*Math.cos(a), y: pts[i].y + 15*Math.sin(a)}, labels[i], -10, -10);
                 labelsSvg += createVertexLabel({x: e.x + 5*Math.cos(a), y: e.y + 5*Math.sin(a)}, extNames[i], 0, 0);
             }
             
             for (let i = 0; i < n; i++) {
-                let curr = pts[(i+1)%n]; 
-                let next = pts[(i+2)%n];
-                let extP = extPts[i];
-                if (i === n - 1) { 
-                    arcsSvg += createAngleArc(curr, next, extP, 22, 'x', '#2b6cb0');
-                } else {
-                    arcsSvg += createAngleArc(curr, next, extP, 22, `${extAngles[i]}^\\circ`);
-                    sumStr += `${extAngles[i]}^\\circ + `;
-                }
+                let curr = pts[(i+1)%n], next = pts[(i+2)%n], extP = extPts[i];
+                if (i === n - 1) arcsSvg += createAngleArc(curr, next, extP, 22, 'x', '#2b6cb0');
+                else { arcsSvg += createAngleArc(curr, next, extP, 22, `${extAngles[i]}^\\circ`); sumStr += `${extAngles[i]}^\\circ + `; }
             }
             sumStr = sumStr.slice(0, -3);
-            
-            let polyName = n === 4 ? '四邊形' : (n === 5 ? '五邊形' : '六邊形');
+            let polyName = lang === 'zh' ? (n === 4 ? '四邊形' : (n === 5 ? '五邊形' : '六邊形')) : (n === 4 ? 'quadrilateral' : (n === 5 ? 'pentagon' : 'hexagon'));
             let polyStr = labels.slice(0, n).join('');
             
             svg.innerHTML = polySvg + extLinesSvg + arcsSvg + labelsSvg;
-            qText.innerHTML = `${badge}<b>題目：</b>求圖中凸${polyName} $${polyStr}$ 的未知外角 $x$。`;
-            solText.innerHTML = `<b>詳細解題步驟：</b>
+            qText.innerHTML = `${badge}${lang === "zh" ? `<b>題目：</b>求圖中凸${polyName} $${polyStr}$ 的未知外角 $x$。` : `<b>Question: </b>Find the unknown exterior angle $x$ of the convex ${polyName} $${polyStr}$ in the figure.`}`;
+            solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
             $$\\begin{aligned}
-            \\text{Sum of ext. } \\angle\\text{s of polygon} &= 360^\\circ && (\\text{sum of ext. } \\angle \\text{s of polygon}) \\\\
+            ${txt.sum_ext_poly_text} &= 360^\\circ && (${txt.sum_ext_poly}) \\\\
             x + ${sumStr} &= 360^\\circ \\\\
             x + ${currentSum}^\\circ &= 360^\\circ \\\\
             x &= ${ans}^\\circ
@@ -1215,32 +1073,18 @@
             const variant = getRandomInt(1, 4);
             if (variant === 1) {
                 const n = getRandomInt(4, 6);
-                let extAngles = [];
-                let currentSum = 0;
-                for (let i = 0; i < n - 1; i++) {
-                    let a = getRandomInt(Math.floor(360/n) - 15, Math.floor(360/n) + 15);
-                    extAngles.push(a);
-                    currentSum += a;
-                }
-                const ans = 360 - currentSum; 
-                const intA = 180 - extAngles[0];
+                let extAngles = [], currentSum = 0;
+                for (let i = 0; i < n - 1; i++) { let a = getRandomInt(Math.floor(360/n) - 15, Math.floor(360/n) + 15); extAngles.push(a); currentSum += a; }
+                const ans = 360 - currentSum, intA = 180 - extAngles[0];
                 
-                const cx = 260, cy = 140, R = 90, pts = [];
-                const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
-                const extNames = ['P', 'Q', 'R', 'S', 'T', 'U'];
-                for(let i = 0; i < n; i++) {
-                    pts.push({
-                        x: cx + R * Math.cos((-90 + i * (360/n)) * Math.PI / 180), 
-                        y: cy + R * Math.sin((-90 + i * (360/n)) * Math.PI / 180)
-                    });
-                }
+                const cx = 260, cy = 140, R = 90, pts = [], labels = ['A', 'B', 'C', 'D', 'E', 'F'], extNames = ['P', 'Q', 'R', 'S', 'T', 'U'];
+                for(let i = 0; i < n; i++) pts.push({ x: cx + R * Math.cos((-90 + i * (360/n)) * Math.PI / 180), y: cy + R * Math.sin((-90 + i * (360/n)) * Math.PI / 180) });
                 
-                let polySvg = `<polygon points="${pts.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>`;
-                let extLinesSvg = '', arcsSvg = '', labelsSvg = '', extPts = [];
+                let polySvg = `<polygon points="${pts.map(p => p.x + ',' + p.y).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>`;
+                let extLinesSvg = '', arcsSvg = '', labelsSvg = '', extPts = [], sumStr = '';
                 
                 for (let i = 0; i < n; i++) {
-                    let e = getExtendedPoint(pts[i], pts[(i + 1) % n], 50);
-                    extPts.push(e);
+                    let e = getExtendedPoint(pts[i], pts[(i + 1) % n], 50); extPts.push(e);
                     if (i !== 0) {
                         extLinesSvg += `<line x1="${pts[(i+1)%n].x}" y1="${pts[(i+1)%n].y}" x2="${e.x}" y2="${e.y}" stroke="#718096" stroke-width="1.8" stroke-dasharray="4,4"/>`;
                         let a = Math.atan2(pts[i].y - cy, pts[i].x - cx);
@@ -1250,38 +1094,23 @@
                     labelsSvg += createVertexLabel({x: pts[i].x + 15*Math.cos(a), y: pts[i].y + 15*Math.sin(a)}, labels[i], -10, -10);
                 }
                 
-                let sumStr = '';
                 for (let i = 0; i < n; i++) {
-                    let curr = pts[(i+1)%n]; 
-                    let next = pts[(i+2)%n];
-                    let prev = pts[i];
-                    let extP = extPts[i];
-                    
-                    if (i === 0) {
-                        arcsSvg += createAngleArc(curr, prev, next, 22, `${intA}^\\circ`);
-                        sumStr += `${extAngles[0]}^\\circ + `;
-                    } else if (i === n - 1) { 
-                        arcsSvg += createAngleArc(curr, next, extP, 22, 'x', '#2b6cb0');
-                    } else {
-                        arcsSvg += createAngleArc(curr, next, extP, 22, `${extAngles[i]}^\\circ`);
-                        sumStr += `${extAngles[i]}^\\circ + `;
-                    }
+                    let curr = pts[(i+1)%n], next = pts[(i+2)%n], prev = pts[i], extP = extPts[i];
+                    if (i === 0) { arcsSvg += createAngleArc(curr, prev, next, 22, `${intA}^\\circ`); sumStr += `${extAngles[0]}^\\circ + `; }
+                    else if (i === n - 1) arcsSvg += createAngleArc(curr, next, extP, 22, 'x', '#2b6cb0');
+                    else { arcsSvg += createAngleArc(curr, next, extP, 22, `${extAngles[i]}^\\circ`); sumStr += `${extAngles[i]}^\\circ + `; }
                 }
                 sumStr = sumStr.slice(0, -3);
-                
-                let polyName = n === 4 ? '四邊形' : (n === 5 ? '五邊形' : '六邊形');
-                let polyStr = labels.slice(0, n).join('');
-                let intVertex = labels[1];
-                let prevVertex = labels[0];
-                let nextVertex = labels[2];
+                let polyName = lang === 'zh' ? (n === 4 ? '四邊形' : (n === 5 ? '五邊形' : '六邊形')) : (n === 4 ? 'quadrilateral' : (n === 5 ? 'pentagon' : 'hexagon'));
+                let polyStr = labels.slice(0, n).join(''), intVertex = labels[1], prevVertex = labels[0], nextVertex = labels[2];
                 
                 svg.innerHTML = polySvg + extLinesSvg + arcsSvg + labelsSvg;
-                qText.innerHTML = `${badge}<b>題目：</b>已知凸${polyName} $${polyStr}$ 中，內角 $\\angle ${prevVertex}${intVertex}${nextVertex} = ${intA}^\\circ$。求未知外角 $x$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? `<b>題目：</b>已知凸${polyName} $${polyStr}$ 中，內角 $\\angle ${prevVertex}${intVertex}${nextVertex} = ${intA}^\\circ$。求未知外角 $x$。` : `<b>Question: </b>In the convex ${polyName} $${polyStr}$ , given the interior angle $\\angle ${prevVertex}${intVertex}${nextVertex} = ${intA}^\\circ$. Find the unknown exterior angle $x$.`}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\text{Ext. } \\angle \\text{ at } ${intVertex} + \\angle ${prevVertex}${intVertex}${nextVertex} &= 180^\\circ && (\\text{adj. } \\angle\\text{s on a st. line}) \\\\
-                \\text{Ext. } \\angle \\text{ at } ${intVertex} &= 180^\\circ - ${intA}^\\circ = ${extAngles[0]}^\\circ \\\\
-                \\text{Sum of ext. } \\angle\\text{s of polygon} &= 360^\\circ && (\\text{sum of ext. } \\angle \\text{s of polygon}) \\\\
+                ${txt.ext_angle_at(intVertex)} + \\angle ${prevVertex}${intVertex}${nextVertex} &= 180^\\circ && (${txt.adj_st_line}) \\\\
+                ${txt.ext_angle_at(intVertex)} &= 180^\\circ - ${intA}^\\circ = ${extAngles[0]}^\\circ \\\\
+                ${txt.sum_ext_poly_text} &= 360^\\circ && (${txt.sum_ext_poly}) \\\\
                 x + ${sumStr} &= 360^\\circ \\\\
                 x &= ${ans}^\\circ
                 \\end{aligned}$$`;
@@ -1292,45 +1121,38 @@
 
                 svg.innerHTML = `
                     <circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#cbd5e0" stroke-dasharray="4,4"/>
-                    <polygon points="${pts.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
+                    <polygon points="${pts.map(p => p.x + ',' + p.y).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
                     <line x1="${pts[1].x}" y1="${pts[1].y}" x2="${ext.x}" y2="${ext.y}" stroke="#718096" stroke-width="1.8" stroke-dasharray="4,4"/>
                     ${createAngleArc(pts[1], ext, pts[2], 22, 'x', '#2b6cb0')}
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>求正八邊形（Regular octagon）每個外角 $x$ 的度數。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? "<b>題目：</b>求正八邊形（Regular octagon）每個外角 $x$ 的度數。" : "<b>Question: </b>Find the size of each exterior angle $x$ of a regular octagon."}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\text{Sum of ext. } \\angle\\text{s of polygon} &= 360^\\circ && (\\text{sum of ext. } \\angle\\text{s of polygon}) \\\\
+                ${txt.sum_ext_poly_text} &= 360^\\circ && (${txt.sum_ext_poly}) \\\\
                 8x &= 360^\\circ \\\\
                 x &= 45^\\circ
                 \\end{aligned}$$`;
             } else if (variant === 3) {
-                const k = getRandomInt(2, 4); 
-                const n = (k * 2) + 2; 
+                const k = getRandomInt(2, 4), n = (k * 2) + 2; 
                 let cx = 260, cy = 250, R = 150, pts = [];
                 for(let i=0; i<5; i++) pts.push({x: cx + R * Math.cos((210 + i * (360/n)) * Math.PI / 180), y: cy + R * Math.sin((210 + i * (360/n)) * Math.PI / 180)});
                 
                 svg.innerHTML = `
-                    <polyline points="${pts.map(p => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
+                    <polyline points="${pts.map(p => p.x + ',' + p.y).join(' ')}" fill="none" stroke="#2d3748" stroke-width="2"/>
                     <path d="M ${pts[0].x} ${pts[0].y} Q 260 210 ${pts[4].x} ${pts[4].y}" fill="none" stroke="#cbd5e0" stroke-width="2" stroke-dasharray="6,6"/>
-                    <foreignObject x="220" y="150" width="80" height="30">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="font-size: 16px;">$n$ sides</div>
-                    </foreignObject>
+                    <foreignObject x="220" y="150" width="80" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="font-size: 16px;">$n$ sides</div></foreignObject>
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知一個正多邊形（Regular polygon）的內角和是其外角和的 ${k} 倍。求該多邊形的邊數 $n$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? `<b>題目：</b>已知一個正多邊形（Regular polygon）的內角和是其外角和的 ${k} 倍。求該多邊形的邊數 $n$。` : `<b>Question: </b>Given that the sum of interior angles of a regular polygon is ${k} times the sum of its exterior angles. Find the number of sides $n$ of the polygon.`}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                \\text{Sum of ext. } \\angle\\text{s} &= 360^\\circ && (\\text{sum of ext. } \\angle\\text{s of polygon}) \\\\
-                \\text{Sum of int. } \\angle\\text{s} &= ${k} \\times 360^\\circ = ${k * 360}^\\circ \\\\
-                (n - 2) \\times 180^\\circ &= ${k * 360}^\\circ && (\\text{sum of polygon}) \\\\
+                ${txt.sum_ext_angles} &= 360^\\circ && (${txt.sum_ext_poly}) \\\\
+                ${txt.sum_int_angles} &= ${k} \\times 360^\\circ = ${k * 360}^\\circ \\\\
+                (n - 2) \\times 180^\\circ &= ${k * 360}^\\circ && (${txt.sum_poly}) \\\\
                 n - 2 &= ${k * 2} \\\\
                 n &= ${n}
                 \\end{aligned}$$`;
             } else {
-                const sides = [10, 12, 18];
-                const n = sides[getRandomInt(0, 2)];
-                const ext = 360 / n;
-                const intA = 180 - ext;
-                const diff = intA - ext;
+                const sides = [10, 12, 18], n = sides[getRandomInt(0, 2)], ext = 360 / n, diff = 180 - 2 * ext;
                 
                 svg.innerHTML = `
                     <line x1="120" y1="200" x2="400" y2="200" stroke="#718096" stroke-width="1.8" stroke-dasharray="4,4"/>
@@ -1338,19 +1160,17 @@
                     <line x1="260" y1="200" x2="140" y2="200" stroke="#2d3748" stroke-width="2"/>
                     ${createAngleArc({x:260, y:200}, {x:140, y:200}, {x:260 + 120*Math.cos((180-ext)*Math.PI/180), y:200 - 120*Math.sin((180-ext)*Math.PI/180)}, 30, 'x', '#2b6cb0')}
                     ${createAngleArc({x:260, y:200}, {x:260 + 120*Math.cos((180-ext)*Math.PI/180), y:200 - 120*Math.sin((180-ext)*Math.PI/180)}, {x:400, y:200}, 30, 'y')}
-                    <foreignObject x="220" y="80" width="80" height="30">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="font-size: 16px;">$n$-gon</div>
-                    </foreignObject>
+                    <foreignObject x="220" y="80" width="80" height="30"><div xmlns="http://www.w3.org/1999/xhtml" class="math-label" style="font-size: 16px;">$n$-gon</div></foreignObject>
                 `;
-                qText.innerHTML = `${badge}<b>題目：</b>已知一個正 $n$ 邊形的每一內角 $x$ 比其每一外角 $y$ 大 $${diff}^\\circ$。求邊數 $n$。`;
-                solText.innerHTML = `<b>詳細解題步驟：</b>
+                qText.innerHTML = `${badge}${lang === "zh" ? `<b>題目：</b>已知一個正 $n$ 邊形的每一內角 $x$ 比其每一外角 $y$ 大 $${diff}^\\circ$。求邊數 $n$。` : `<b>Question: </b>Given that each interior angle $x$ of a regular $n$-gon is $${diff}^\\circ$ greater than each of its exterior angles $y$. Find the number of sides $n$.`}`;
+                solText.innerHTML = `${lang === "zh" ? "<b>詳細解題步驟：</b>" : "<b>Detailed Solution: </b>"}
                 $$\\begin{aligned}
-                x + y &= 180^\\circ && (\\text{adj. } \\angle\\text{s on a st. line}) \\\\
-                x - y &= ${diff}^\\circ && (\\text{given}) \\\\
+                x + y &= 180^\\circ && (${txt.adj_st_line}) \\\\
+                x - y &= ${diff}^\\circ && (${txt.given}) \\\\
                 (x + y) - (x - y) &= 180^\\circ - ${diff}^\\circ \\\\
                 2y &= ${180 - diff}^\\circ \\\\
                 y &= ${ext}^\\circ \\\\
-                \\text{Ext. } \\angle \\text{ of regular } n\\text{-gon} &= \\frac{360^\\circ}{n} && (\\text{sum of ext. } \\angle\\text{s of polygon}) \\\\
+                ${txt.ext_regular_n} &= \\frac{360^\\circ}{n} && (${txt.sum_ext_poly}) \\\\
                 ${ext}^\\circ &= \\frac{360^\\circ}{n} \\\\
                 n &= ${n}
                 \\end{aligned}$$`;
